@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#e7edde">
+<meta name="description" content="Take a drive in the 2012 Happy Home in Robloxia archive.">
+<link rel="icon" href="data:,"><title>Happy Home in Robloxia • 2012 Web Edition</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main id="game">
+  <canvas id="view" aria-label="Happy Home in Robloxia 3D world"></canvas>
+  <header>
+    <div class="brand"><span>2012 ARCHIVE</span><h1>Happy Home</h1></div>
+    <div class="menu"><button id="sound" type="button" aria-pressed="false">Sound</button><button id="menu" type="button">Menu</button></div>
+  </header>
+  <section id="objective" aria-live="polite"><b id="objective-title">Take the Jeep</b><small id="objective-sub">Explore the original map</small></section>
+  <button type="button" id="marker" tabindex="-1" hidden><span></span><b>Jeep</b></button>
+  <aside id="compass" aria-hidden="true"><span id="needle">▲</span><b id="distance"></b></aside>
+  <div id="toast" aria-live="polite" hidden></div>
+  <div class="controls">
+    <div id="stick" aria-label="Move joystick"><div id="knob"></div></div>
+    <div class="keys" id="keys">WASD <b>Move</b> · Drag <b>Look</b> · Space <b>Jump</b></div>
+    <div class="actions">
+      <button id="tv" type="button" hidden>TV</button>
+      <button id="action" type="button">Get in</button>
+      <button id="jump" type="button">Jump</button>
+    </div>
+  </div>
+  <dialog id="panel">
+    <div class="paper">
+      <span class="eyebrow">2012 ARCHIVE</span>
+      <h2 id="panel-title">Field Notes</h2>
+      <div id="passport"></div>
+      <p id="reward" hidden></p>
+      <button type="button" id="continue" autofocus>Resume</button>
+      <button type="button" id="return">Back to spawn</button>
+      <button type="button" id="restart" hidden>New tour</button>
+      <p class="credit">Unofficial web port of Roblox’s 2012 archive.</p>
+    </div>
+  </dialog>
+  <div id="error" hidden><h2>3D unavailable</h2><p>Open this game in a browser with WebGL support.</p><button type="button" id="retry">Reload</button></div>
+</main>
+<script src="vendor/three.min.js"></script>
+<script type="module" src="app.mjs"></script>
+</body>
+</html>
