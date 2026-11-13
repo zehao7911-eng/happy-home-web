@@ -18,7 +18,7 @@ html = read("index-source.html")
 html = html.replace('<link rel="stylesheet" href="style.css">', "<style>\n" + read("style.css") + "\n</style>")
 html = html.replace('<script src="vendor/three.min.js"></script>',
                     "<script>\n/*\n" + read("vendor/THREE-LICENSE.txt") + "\n*/\n" + read("vendor/three.min.js") + "\n</script>")
-scripts = [("map.mjs",None),("world.mjs","World"),("art.mjs","Art"),("sdk.mjs","SDK"),("app.mjs",None)]
+scripts = [("map.mjs",None),("fidelity.mjs",None),("world.mjs","World"),("source-visuals.mjs","SourceVisuals"),("art.mjs","Art"),("sdk.mjs","SDK"),("app.mjs",None)]
 html = html.replace('<script type="module" src="app.mjs"></script>',
                     "<script>(()=>{\n" + "\n".join(wrap(name,binding) for name,binding in scripts) + "\n})();</script>")
 for name in ("index.html","standalone.html"):

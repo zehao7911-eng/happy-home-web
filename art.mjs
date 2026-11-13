@@ -57,32 +57,52 @@ function batch(group, rows){
   }
 }
 function hills(terrain,shapes,scene){
-  const mat=new T.MeshLambertMaterial({vertexColors:true,side:T.DoubleSide});
-  const palette=[0x6e9251,0x759853,0x63864d,0x799759,0x70934f];
-  for(let vz=0;vz<512;vz+=64)for(let ux=0;ux<512;ux+=64){
-    const points=[],colors=[],triangles=[];
-    const span=64, interval=2, n=span/interval+1;
-    const c=new T.Color();
-    for(let j=0;j<n;j++)for(let i=0;i<n;i++){
-      const ix=ux+i*interval,iz=vz+j*interval;
-      const x=(ix-256)*4,z=(iz-256)*4,h=terrain.corner(ix,iz);
-      points.push(x,h,z);
-      const s=shapes[Math.min(511,iz)*512+Math.min(511,ix)]||0;
-      const index=Math.abs((ix*7759^iz*10231)>>>5)%palette.length;
-      c.setHex(palette[index]);
-      c.multiplyScalar(.9+Math.min(.17,h/550)+(s&24?-.02:.02));
-      colors.push(c.r,c.g,c.b);
-      if(i&&j){
-        const q=j*n+i;
-        if(h||terrain.corner(ix-interval,iz-interval))triangles.push(q-n-1,q-1,q-n,q-n,q-1,q);
+  const mat=new T.MeshLambertMaterial({vertexColors:true,side:T.FrontSide});
+  const colors=[0x718b43,0x748c45,0x6f8942,0x728b45,0x708b44].map(c=>new T.Color(c));
+  const tilePoints=[[0,0],[0,1],[1,0],[1,1]];
+  for(let z=0;z<512;z+=32)for(let x=0;x<512;x+=32){
+    const points=[],rgb=[];
+    function triangle(a,b,c,color){
+      points.push(...a,...b,...c);
+      for(let k=0;k<3;k++)rgb.push(color.r,color.g,color.b);
+    }
+    function quad(a,b,c,d,color){
+      triangle(a,b,c,color);triangle(c,b,d,color);
+    }
+    for(let j=z;j<z+32;j++)for(let i=x;i<x+32;i++){
+      const h=terrain.cell(i,j);
+      if(!h)continue;
+      const bits=shapes[j*512+i],shape=bits>>3&7,dir=bits>>6&3;
+      const color=colors[(i*11^j*7)%colors.length];
+      const slab=(i-256)*4,back=(j-256)*4;
+      const offset=tilePoints.map(([u,v])=>{
+        let a=u,b=v;
+        for(let q=0;q<dir;q++)[a,b]=[b,1-a];
+        if(shape===1)return b?0:-4;
+        if(shape===2)return a&&b?0:-4;
+        if(shape===3)return a||b?0:-4;
+        return 0;
+      });
+      const v=tilePoints.map(([u,w],k)=>[slab+u*4,h+offset[k],back+w*4]);
+      if(shape===4)triangle(v[0],v[1],v[2],color);
+      else if((shape===2||shape===3)&&(dir%2===0)){
+        triangle(v[0],v[1],v[3],color);triangle(v[0],v[3],v[2],color);
+      }else quad(...v,color);
+      const walls=[[0,1,i-1,j],[1,3,i,j+1],[3,2,i+1,j],[2,0,i,j-1]];
+      for(const [m,n,u,w] of walls){
+        const bottom=terrain.cell(u,w);
+        if(bottom>=Math.max(v[m][1],v[n][1]))continue;
+        const floor=Math.max(0,bottom||h-12);
+        const a=v[m],b=v[n];
+        quad(a,[a[0],Math.min(a[1],floor),a[2]],b,[b[0],Math.min(b[1],floor),b[2]],color);
       }
     }
-    if(!triangles.length)continue;
+    if(!points.length)continue;
     const g=new T.BufferGeometry();
     g.setAttribute('position',new T.Float32BufferAttribute(points,3));
-    g.setAttribute('color',new T.Float32BufferAttribute(colors,3));
-    g.setIndex(triangles);
+    g.setAttribute('color',new T.Float32BufferAttribute(rgb,3));
     g.computeVertexNormals();
+    g.computeBoundingSphere();
     scene.add(new T.Mesh(g,mat));
   }
 }
@@ -142,15 +162,18 @@ export class View {
     this.renderer.outputEncoding=T.sRGBEncoding;
     this.renderer.setClearColor(0xc8deeb);
     const scene=this.scene=new T.Scene();
-    scene.fog=new T.FogExp2(0xc6dddc,.0019);
+    scene.fog=new T.Fog(0xb6d0ea,530,1450);
     this.sky=skyDome();
-    scene.add(this.sky,new T.HemisphereLight(0xf2f8ff,0x9c946e,.75));
-    const sun=new T.DirectionalLight(0xffe7ba,.62);
+    scene.add(this.sky,new T.AmbientLight(0xffffff,ORIGINAL.ambient[0]*1.30));
+    const sun=new T.DirectionalLight(0xfff8e8,ORIGINAL.brightness*.68);
     sun.position.set(-80,140,-95);
     scene.add(sun);
     hills(terrain,shapes,scene);
-    const byTile=new Map();
-    for(const p of map.parts){
+    const byTile=new Map(),dynamic=new Map();
+    const imported=new Set(ORIGINAL.meshes.map(m=>m[0]));
+    this.visuals=SourceVisuals.makeSourceVisuals(ORIGINAL,scene);
+    for(const [i,p] of map.parts.entries()){
+      if(imported.has(i))continue;
       if(p[16]>=1||p[19])continue;
       const key=Math.floor(p[0]/58)+','+Math.floor(p[2]/58);
       if(!byTile.has(key))byTile.set(key,[]);
@@ -160,7 +183,7 @@ export class View {
     this.doors=map.doors.map((ids,i)=>{
       const leaf=ids.map(id=>{
         const p=map.parts[id],m=model(p);
-        scene.add(m);
+        scene.add(m);dynamic.set(id,m);
         return {p,m};
       });
       return {leaf,amount:0,x:(leaf[0].p[0]+leaf[1].p[0])/2,y:leaf[0].p[1],z:(leaf[0].p[2]+leaf[1].p[2])/2,axis:i===0?0:2};
@@ -168,12 +191,14 @@ export class View {
     const tvPart=map.parts.find(p=>p[19]===20);
     this.tv=model(tvPart);
     scene.add(this.tv);
+    this.tvStatic=this.visuals.tv(tvPart,this.tv);
     this.car=new T.Group();
     this.wheels=[];
     for(const id of map.jeep){
       const p=map.parts[id];
       if(p[16]===1)continue;
       const m=model(p,World.GARAGE[0],World.GARAGE[1],World.GARAGE[2]);
+      dynamic.set(id,m);
       if(p[19]===2){
         const pivot=new T.Group();
         pivot.position.set(p[0]-World.GARAGE[0],p[1]-World.GARAGE[1],p[2]-World.GARAGE[2]);
@@ -181,6 +206,8 @@ export class View {
         pivot.add(m);this.car.add(pivot);this.wheels.push(pivot);
       }else this.car.add(m);
     }
+    this.visuals.overlay(ORIGINAL.decals,dynamic,map.parts);
+    for(const mesh of ORIGINAL.meshes)this.visuals.importMesh(mesh,map.parts);
     this.avatar=makeAvatar();
     this.playerShadow=softShadow();
     this.carShadow=softShadow();
@@ -198,7 +225,7 @@ export class View {
   }
   resize(w,h){
     this.camera.aspect=w/h;
-    this.camera.fov=w<h?82:57;
+    this.camera.fov=w<h?82:ORIGINAL.fov;
     this.camera.updateProjectionMatrix();
     this.renderer.setPixelRatio(Math.min(devicePixelRatio||1,w<h?1.35:1.65));
     this.renderer.setSize(w,h,false);
@@ -244,7 +271,7 @@ export class View {
         leaf.m.matrixWorldNeedsUpdate=true;
       }
     }
-    this.tv.material.emissive.setHex(data.tv?(Math.floor(time*5)%2?0x36708b:0x59697b):0);
+    this.tvStatic(data.tv,time);
     for(const p of this.particles)if(p.life>0){
       p.life=Math.max(0,p.life-dt);
       p.m.visible=p.life>0;
@@ -264,6 +291,13 @@ export class View {
           wanted.lerpVectors(target,wanted,Math.max(.15,k-.13));break;
         }
       }
+    }
+    if(intro>.01){
+      const q=ORIGINAL.camera;
+      const archived=new T.Vector3(q[0],q[1],q[2]);
+      const gaze=new T.Vector3(q[0]-q[5]*30,q[1]-q[8]*30,q[2]-q[11]*30);
+      wanted.lerp(archived,intro);
+      target.lerp(gaze,intro);
     }
     const lerp=this.ready?1-Math.exp(-dt*12):1;
     this.camPos.lerp(wanted,lerp);this.focus.lerp(target,lerp);this.ready=true;

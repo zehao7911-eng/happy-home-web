@@ -69,7 +69,7 @@ export function sanitize(raw, terrain) {
   base.tv=raw.tv===true;
   return base;
 }
-export function locomotion(data, terrain, parts) {
+export function locomotion(data, terrain, parts, spec={maxSpeed:50,steer:2}) {
   const near=colliders(parts);
   let speed=0, vy=0, grounded=true, drop=0, groundLast=0;
   const wrap=yaw=>Math.atan2(Math.sin(yaw),Math.cos(yaw));
@@ -83,9 +83,9 @@ export function locomotion(data, terrain, parts) {
     const radius=drive?2.9:1.05, height=drive?6:4.9, stepHeight=drive?3.1:1.45;
     let dx=0,dz=0;
     if(drive){
-      const target=input.y>=0?input.y*49:input.y*21;
+      const target=input.y>=0?input.y*spec.maxSpeed:input.y*spec.maxSpeed*.42;
       speed=blend(speed,target,Math.min(1,dt*(input.y?2.5:4.8)));
-      p.yaw=wrap(p.yaw+input.x*dt*2.05*clamp(Math.abs(speed)/10+.05,.05,1)*Math.sign(speed||1));
+      p.yaw=wrap(p.yaw+input.x*dt*spec.steer*clamp(Math.abs(speed)/10+.05,.05,1)*Math.sign(speed||1));
       dx=Math.sin(p.yaw)*speed*dt;
       dz=-Math.cos(p.yaw)*speed*dt;
     }else{

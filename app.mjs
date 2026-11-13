@@ -19,10 +19,11 @@ let notice=0,lastStep=0,lastDust=0,lastBump=0;
 let goalKey='', continuePlay=false, approachJeep=false;
 const press=new Set(),touch={x:0,y:0,id:null};
 const input={x:0,y:0,cameraYaw,jump:false};
-const mover=locomotion(data,terrain,MAP.parts);
+const mover=locomotion(data,terrain,MAP.parts,ORIGINAL);
+let tour=raw.tour===true||(raw.tour==null&&data.stamps>0&&!data.finished);
 const ease=x=>x*x*(3-2*x);
 function persist(){
-  try{localStorage.setItem(key,JSON.stringify({run:data,profile,sound}));}catch{}
+  try{localStorage.setItem(key,JSON.stringify({run:data,profile,sound,tour}));}catch{}
 }
 function merge(next,cloud){
   const best=Number.isInteger(next?.best)?clamp(next.best,0,7):0;
@@ -36,7 +37,7 @@ function announce(text,seconds=2){
   $('toast').textContent=text;$('toast').hidden=false;notice=time+seconds;
 }
 function start(){
-  if(!session&&!data.finished&&!continuePlay){session=true;sdk.start();}
+  if(tour&&!session&&!data.finished&&!continuePlay){session=true;sdk.start();}
 }
 function activateAudio(){
   if(!sound)return;
@@ -60,8 +61,9 @@ function chord(){
 }
 function target(){
   if(data.finished)return null;
-  if(!data.stamps&&!continuePlay&&data.mode!=='drive'&&Math.hypot(data.player.x-data.car.x,data.player.z-data.car.z)>13)
+  if((!tour||!data.stamps)&&!continuePlay&&data.mode!=='drive'&&Math.hypot(data.player.x-data.car.x,data.player.z-data.car.z)>13)
     return {name:'Jeep',x:data.car.x,y:data.car.y+6.4,z:data.car.z,car:true};
+  if(!tour)return null;
   const next=LANDMARKS.findIndex((_,i)=>!(data.stamps&1<<i));
   if(next<0)return null;
   const v=LANDMARKS[next];
@@ -71,13 +73,14 @@ function updateUI(){
   const drive=data.mode==='drive',a=drive?data.car:data.player;
   const inRange=Math.hypot(data.player.x-data.car.x,data.player.z-data.car.z)<14&&Math.abs(data.player.y-data.car.y)<7;
   $('action').disabled=false;
-  $('action').hidden=!drive&&!inRange&&(data.stamps!==0||continuePlay);
+  $('action').hidden=!drive&&!inRange&&(tour&&data.stamps!==0||continuePlay);
   $('action').textContent=drive?'Get out':inRange?'Get in':'Find Jeep';
   $('jump').hidden=drive;
   $('tv').hidden=drive||Math.hypot(a.x-MAP.tv[0],a.z-MAP.tv[2])>11||Math.abs(a.y-MAP.tv[1])>9;
   $('tv').setAttribute('aria-pressed',String(data.tv));
   const v=target();
-  const title=v?.car?'Take the Jeep':v?.name||'Free Roam';
+  const title=tour&&v?.car?'Take the Jeep':v?.name||'Free Roam';
+  $('objective').hidden=!tour;
   const sub=v?.car?'Tap Jeep or walk up':data.finished?'All three stamps collected':'Visit the three landmarks';
   if(goalKey!==title+sub){
     $('objective-title').textContent=title;$('objective-sub').textContent=sub;
@@ -166,7 +169,9 @@ function clearInput(){
 function openPanel(won=false){
   clearInput();updatePanel();$('panel-title').textContent=won?'Tour Complete':'Field Notes';
   $('continue').textContent=won?'Keep exploring':'Resume';
-  $('restart').hidden=!data.finished;
+  $('restart').hidden=false;
+  $('restart').textContent=tour?(data.finished?'New tour':'Free roam'):(data.finished?'New tour':data.stamps?'Resume tour':'Start tour');
+  $('passport').hidden=!tour&&!data.stamps;
   if(!panel.open)panel.showModal();
 }
 function closePanel(){
@@ -204,7 +209,15 @@ function init(){
   $('menu').onclick=()=>openPanel();
   $('continue').onclick=()=>{continuePlay=data.finished;closePanel();};
   $('return').onclick=()=>back(false);
-  $('restart').onclick=()=>back(true);
+  $('restart').onclick=()=>{
+    if(tour&&!data.finished){
+      tour=false;persist();closePanel();updateUI();
+    }else{
+      tour=true;
+      if(data.finished){back(true);return;}
+      closePanel();persist();updateUI();
+    }
+  };
   $('action').onclick=useAction;
   $('tv').onclick=toggleTV;
   $('jump').onclick=()=>{activateAudio();start();input.jump=true;intro=0;};
@@ -264,7 +277,7 @@ function init(){
     previous=now;
     if(panel.open)return;
     time+=dt;displayTime+=dt;
-    intro=Math.max(0,intro-dt*.78);
+    intro=Math.max(0,intro-dt*.57);
     const active=data.mode==='drive'?data.car:data.player;
     if(data.mode==='drive'&&time>freeLook){
       const delta=active.yaw-cameraYaw;
@@ -288,7 +301,7 @@ function init(){
     while(acc>=1/60){
       motion=mover.step(1/60,input);acc-=1/60;
     }
-    if(session)inspect();
+    if(tour&&session)inspect();
     if(motion.drop>13&&time-lastBump>.16){lastBump=time;tone(100,.14,.09,'triangle',.68);}
     if(motion.bump&&Math.abs(motion.speed)>6&&time-lastBump>.22){
       lastBump=time;tone(91,.16,.11,'triangle',.65);
