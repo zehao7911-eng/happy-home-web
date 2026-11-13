@@ -506,9 +506,11 @@ function hills(terrain,shapes,scene){
       }else quad(...v,color);
       const walls=[[0,1,i-1,j],[1,3,i,j+1],[3,2,i+1,j],[2,0,i,j-1]];
       for(const [m,n,u,w] of walls){
-        const bottom=terrain.cell(u,w);
+        const adjacent=terrain.cell(u,w);
+        const other=shapes[w*512+u]>>3&7;
+        const bottom=other?adjacent-4:adjacent;
         if(bottom>=Math.max(v[m][1],v[n][1]))continue;
-        const floor=Math.max(0,bottom||h-12);
+        const floor=Math.max(0,adjacent?bottom:h-12);
         const a=v[m],b=v[n];
         quad(a,[a[0],Math.min(a[1],floor),a[2]],b,[b[0],Math.min(b[1],floor),b[2]],color);
       }
